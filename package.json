@@ -8,7 +8,7 @@
     "dev:backend": "npm run dev --prefix backend",
     "db:setup": "npm run db:setup --prefix backend",
     "build": "npm run build --prefix frontend",
-    "build:backend": "npm install --prefix backend && npm run build --prefix backend && npx --prefix backend prisma db push",
+    "build:backend": "npm install --prefix backend && npm run build --prefix backend && npx --prefix backend prisma db push --accept-data-loss",
     "start:backend": "npm run start --prefix backend"
   },
   "devDependencies": {

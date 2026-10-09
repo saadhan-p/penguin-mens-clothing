@@ -9,10 +9,10 @@
     "build": "prisma generate",
     "postinstall": "prisma generate",
     "dev": "nodemon server.js",
-    "db:push": "prisma db push",
-    "db:deploy": "prisma db push && node scripts/seedCleanBasics.js",
+    "db:push": "prisma db push --accept-data-loss",
+    "db:deploy": "prisma db push --accept-data-loss && node scripts/seedCleanBasics.js",
     "db:seed": "node scripts/seedCleanBasics.js",
-    "db:setup": "prisma db push && prisma generate && node scripts/seedCleanBasics.js",
+    "db:setup": "prisma db push --accept-data-loss && prisma generate && node scripts/seedCleanBasics.js",
     "studio": "prisma studio"
   },
   "dependencies": {
