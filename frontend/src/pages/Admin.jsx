@@ -22,6 +22,7 @@ import {
   createAdminUser,
   listAdminUsers,
   uploadProductImage,
+  uploadMultipleProductImages,
   getAdminCategories,
   createCategory,
   updateCategory,
@@ -81,10 +82,21 @@ export default function AdminPage() {
     heroImage: '',
     heroDropTag: '',
     showWinterDrop: true,
+    enableCod: true,
     winterDropTitle: 'WINTER DROP 01',
     winterDropSubtitle: 'Limited capsule — Structured outerwear, heavyweight knitwear & tech bombers. Only 100 units per style.',
     winterDropCta: 'Shop Winter Drop',
     winterDropImage: '',
+    // Hero Slides carousel (dynamic)
+    heroSlides: [
+      { id: 1, tag: 'NEW FW25 CAPSULE // DROP 01', title: 'THE STREETWEAR & LINEN EDIT', subtitle: 'Relaxed silhouettes, heavyweight French terry, and crisp Japanese poplin tailored for modern everyday movement.', cta: 'SHOP COLLECTION', link: '/collection/shirts', img: 'https://images.unsplash.com/photo-1617137984095-74e4e5e3613f?q=80&w=1920&auto=format&fit=crop' },
+      { id: 2, tag: 'NEW ARRIVALS 2025', title: 'VARSITY & STRUCTURED KNITWEAR', subtitle: 'Oversized varsity pullovers, textured cable knits, and relaxed layered silhouettes crafted for all-season comfort.', cta: 'EXPLORE NEW ARRIVALS', link: '/collection', img: 'https://images.unsplash.com/photo-1507679799987-c73779587ccf?q=80&w=1920&auto=format&fit=crop' },
+      { id: 3, tag: 'DAILY ESSENTIALS', title: 'LUXE OVERSIZED & SHIRTS', subtitle: 'High-density organic cotton tees, relaxed camp collars, and pleated trousers crafted with meticulous atelier precision.', cta: 'DISCOVER BESTSELLERS', link: '/collection/shirts', img: 'https://images.unsplash.com/photo-1618886614638-80e3c103d31a?q=80&w=1920&auto=format&fit=crop' },
+    ],
+    // Seasonal / Promotional Drops
+    drops: [
+      { id: 1, name: 'Winter Drop 01', title: 'WINTER DROP 01', subtitle: 'Limited capsule — Structured outerwear, heavyweight knitwear & tech bombers. Only 100 units per style.', cta: 'Shop Winter Drop', link: '/collection', img: 'https://images.unsplash.com/photo-1544441893-675973e31985?q=80&w=1200&auto=format&fit=crop', isVisible: true },
+    ],
   });
   const [loading, setLoading] = useState(false);
   const [statusMsg, setStatusMsg] = useState({ text: '', type: 'success' });
@@ -119,35 +131,34 @@ export default function AdminPage() {
   // Product Form Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+  const [showAdvancedProductOptions, setShowAdvancedProductOptions] = useState(false);
+  const [urlImageInput, setUrlImageInput] = useState('');
+  const [dragActive, setDragActive] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
   const [productForm, setProductForm] = useState({
     name: '',
     category: 'Shirts',
-    color: 'Nocturne Black',
-    price: 11900,
+    color: '',
+    price: '',
     originalPrice: '',
-    badge: 'Drop 01',
+    badge: '',
     badgeColor: 'var(--primary)',
-    images: [''],
+    images: [],
     sizes: [
-      { size: 'S', stock: 5, isSoldOut: false },
-      { size: 'M', stock: 10, isSoldOut: false },
-      { size: 'L', stock: 8, isSoldOut: false },
-      { size: 'XL', stock: 0, isSoldOut: true },
+      { size: 'S', stock: 10, isSoldOut: false },
+      { size: 'M', stock: 15, isSoldOut: false },
+      { size: 'L', stock: 15, isSoldOut: false },
+      { size: 'XL', stock: 10, isSoldOut: false },
     ],
-    colorVariants: [
-      { name: 'Nocturne Black', hex: '#111111' },
-      { name: 'Charcoal', hex: '#2B2B2B' },
-    ],
+    colorVariants: [],
     isWinterDrop: false,
-    isFeatured: true,
+    isFeatured: false,
     inStock: true,
     stockStatus: 'In Stock',
-    fabricDetails: '100% Japanese High-Density Organic Cotton Poplin (180 GSM).',
-    careInstructions: 'Dry clean only or delicate machine wash at 30°C.',
-    description: 'Precision tailored minimalist garment designed with architectural proportions.',
+    fabricDetails: '',
+    careInstructions: '',
+    description: '',
   });
-
-  const [uploadingImage, setUploadingImage] = useState(false);
 
   // Check Auth on Mount
   useEffect(() => {
@@ -875,34 +886,47 @@ export default function AdminPage() {
   const isSuperAdmin = currentUser?.role === 'superadmin';
 
 
+  // Preset lookbook images for quick-testing
+  const PRESET_LOOKBOOK_PHOTOS = [
+    { name: 'Linen Camp Shirt', url: 'https://images.pexels.com/photos/297933/pexels-photo-297933.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    { name: 'Oxford Blue Shirt', url: 'https://images.pexels.com/photos/1043474/pexels-photo-1043474.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    { name: 'Poplin White Shirt', url: 'https://images.pexels.com/photos/3768005/pexels-photo-3768005.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    { name: 'Flannel Plaid Shirt', url: 'https://images.pexels.com/photos/1300550/pexels-photo-1300550.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    { name: 'Minimal Cotton Tee', url: 'https://images.pexels.com/photos/1656684/pexels-photo-1656684.jpeg?auto=compress&cs=tinysrgb&w=600' },
+    { name: 'Tailored Blazer', url: 'https://images.pexels.com/photos/1342609/pexels-photo-1342609.jpeg?auto=compress&cs=tinysrgb&w=600' },
+  ];
+
+  const BADGE_PRESETS = ['NEW', 'BESTSELLER', 'LIMITED', 'WINTER FW25', 'TRENDING', '40% OFF'];
+  const AVAILABLE_SIZES = ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', 'Free Size'];
+
   // Open Modal for New Product
   const handleOpenNewProduct = () => {
     setEditingProduct(null);
+    setShowAdvancedProductOptions(false);
+    setUrlImageInput('');
     setProductForm({
       name: '',
-      category: 'Shirts',
-      color: 'Nocturne Black',
-      price: 11900,
+      category: categories.length > 0 ? categories[0].name : 'Shirts',
+      color: '',
+      price: '',
       originalPrice: '',
-      badge: 'Drop 01',
+      badge: '',
       badgeColor: 'var(--primary)',
-      images: [''],
+      images: [],
       sizes: [
-        { size: 'S', stock: 5, isSoldOut: false },
-        { size: 'M', stock: 10, isSoldOut: false },
-        { size: 'L', stock: 8, isSoldOut: false },
-        { size: 'XL', stock: 0, isSoldOut: true },
+        { size: 'S', stock: 10, isSoldOut: false },
+        { size: 'M', stock: 15, isSoldOut: false },
+        { size: 'L', stock: 15, isSoldOut: false },
+        { size: 'XL', stock: 10, isSoldOut: false },
       ],
-      colorVariants: [
-        { name: 'Nocturne Black', hex: '#111111' },
-      ],
+      colorVariants: [],
       isWinterDrop: false,
-      isFeatured: true,
+      isFeatured: false,
       inStock: true,
       stockStatus: 'In Stock',
-      fabricDetails: '100% Japanese High-Density Organic Cotton Poplin (180 GSM).',
-      careInstructions: 'Dry clean only or delicate machine wash at 30°C.',
-      description: 'Precision tailored minimalist garment designed with architectural proportions.',
+      fabricDetails: '',
+      careInstructions: '',
+      description: '',
     });
     setIsModalOpen(true);
   };
@@ -910,25 +934,51 @@ export default function AdminPage() {
   // Open Modal for Edit
   const handleEditProduct = (prod) => {
     setEditingProduct(prod);
+    setShowAdvancedProductOptions(Boolean(prod.fabricDetails || prod.careInstructions || prod.description));
+    setUrlImageInput('');
+
+    let initialImages = [];
+    if (Array.isArray(prod.images)) {
+      initialImages = prod.images.filter(Boolean);
+    } else if (typeof prod.images === 'string') {
+      try {
+        const parsed = JSON.parse(prod.images);
+        if (Array.isArray(parsed)) initialImages = parsed.filter(Boolean);
+      } catch {
+        if (prod.images) initialImages = [prod.images];
+      }
+    }
+
+    let initialSizes = [
+      { size: 'S', stock: 10, isSoldOut: false },
+      { size: 'M', stock: 15, isSoldOut: false },
+      { size: 'L', stock: 15, isSoldOut: false },
+      { size: 'XL', stock: 10, isSoldOut: false },
+    ];
+    if (prod.sizes) {
+      if (Array.isArray(prod.sizes) && prod.sizes.length > 0) {
+        initialSizes = prod.sizes;
+      } else if (typeof prod.sizes === 'string') {
+        try {
+          const parsed = JSON.parse(prod.sizes);
+          if (Array.isArray(parsed) && parsed.length > 0) initialSizes = parsed;
+        } catch (e) {}
+      }
+    }
+
     setProductForm({
       name: prod.name || '',
-      category: prod.category || 'Shirts',
-      color: prod.color || 'Nocturne Black',
-      price: prod.price || 0,
+      category: prod.category || (categories.length > 0 ? categories[0].name : 'Shirts'),
+      color: prod.color || '',
+      price: prod.price !== undefined && prod.price !== null ? prod.price : '',
       originalPrice: prod.originalPrice || '',
       badge: prod.badge || '',
       badgeColor: prod.badgeColor || 'var(--primary)',
-      images: prod.images && prod.images.length > 0 ? prod.images : [''],
-      sizes: prod.sizes && prod.sizes.length > 0 ? prod.sizes : [
-        { size: 'S', stock: 5, isSoldOut: false },
-        { size: 'M', stock: 10, isSoldOut: false },
-        { size: 'L', stock: 8, isSoldOut: false },
-      ],
-      colorVariants: prod.colorVariants && prod.colorVariants.length > 0 ? prod.colorVariants : [
-        { name: prod.color || 'Nocturne Black', hex: '#111111' },
-      ],
-      isWinterDrop: !!prod.isWinterDrop,
-      isFeatured: prod.isFeatured !== false,
+      images: initialImages,
+      sizes: initialSizes,
+      colorVariants: prod.colorVariants || [],
+      isWinterDrop: Boolean(prod.isWinterDrop),
+      isFeatured: Boolean(prod.isFeatured),
       inStock: prod.inStock !== false,
       stockStatus: prod.stockStatus || 'In Stock',
       fabricDetails: prod.fabricDetails || '',
@@ -938,18 +988,155 @@ export default function AdminPage() {
     setIsModalOpen(true);
   };
 
+  // Image Upload Handlers
+  const handleFilesUpload = async (filesList) => {
+    if (!filesList || filesList.length === 0) return;
+    const filesArray = Array.from(filesList).filter(f => f.type.startsWith('image/'));
+    if (filesArray.length === 0) {
+      showToast('Please select image files (JPG, PNG, WEBP)', 'error');
+      return;
+    }
+
+    setUploadingImage(true);
+    try {
+      if (filesArray.length === 1) {
+        const res = await uploadProductImage(filesArray[0]);
+        if (res?.url) {
+          setProductForm(prev => ({
+            ...prev,
+            images: [...prev.images.filter(Boolean), res.url],
+          }));
+          showToast('Image uploaded successfully');
+        }
+      } else {
+        const res = await uploadMultipleProductImages(filesArray);
+        if (res?.urls && res.urls.length > 0) {
+          setProductForm(prev => ({
+            ...prev,
+            images: [...prev.images.filter(Boolean), ...res.urls],
+          }));
+          showToast(`${res.urls.length} images uploaded`);
+        }
+      }
+    } catch (err) {
+      showToast('Upload error. You can also paste an image URL.', 'error');
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  const handleAddImageUrl = () => {
+    if (!urlImageInput.trim()) return;
+    const trimmed = urlImageInput.trim();
+    if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://') && !trimmed.startsWith('/uploads')) {
+      showToast('Please enter a valid HTTP/HTTPS image URL', 'error');
+      return;
+    }
+    setProductForm(prev => ({
+      ...prev,
+      images: [...prev.images.filter(Boolean), trimmed],
+    }));
+    setUrlImageInput('');
+    showToast('Image URL added');
+  };
+
+  const handleRemoveImage = (indexToRemove) => {
+    setProductForm(prev => ({
+      ...prev,
+      images: prev.images.filter((_, idx) => idx !== indexToRemove),
+    }));
+  };
+
+  const handleSetCoverImage = (indexToCover) => {
+    setProductForm(prev => {
+      const img = prev.images[indexToCover];
+      const remaining = prev.images.filter((_, idx) => idx !== indexToCover);
+      return {
+        ...prev,
+        images: [img, ...remaining],
+      };
+    });
+    showToast('Set as cover image');
+  };
+
+  // Size helper methods
+  const toggleSizeOption = (sizeLabel) => {
+    const existingIndex = productForm.sizes.findIndex(s => s.size === sizeLabel);
+    if (existingIndex >= 0) {
+      setProductForm(prev => ({
+        ...prev,
+        sizes: prev.sizes.filter(s => s.size !== sizeLabel),
+      }));
+    } else {
+      setProductForm(prev => ({
+        ...prev,
+        sizes: [...prev.sizes, { size: sizeLabel, stock: 10, isSoldOut: false }],
+      }));
+    }
+  };
+
+  const updateSizeStock = (sizeLabel, newStock) => {
+    const stockVal = Math.max(0, parseInt(newStock, 10) || 0);
+    setProductForm(prev => ({
+      ...prev,
+      sizes: prev.sizes.map(s => s.size === sizeLabel ? { ...s, stock: stockVal, isSoldOut: stockVal === 0 } : s),
+    }));
+  };
+
+  const applySizePreset = (presetType) => {
+    if (presetType === 'standard') {
+      setProductForm(prev => ({
+        ...prev,
+        sizes: [
+          { size: 'S', stock: 10, isSoldOut: false },
+          { size: 'M', stock: 15, isSoldOut: false },
+          { size: 'L', stock: 15, isSoldOut: false },
+          { size: 'XL', stock: 10, isSoldOut: false },
+        ],
+      }));
+    } else if (presetType === 'all') {
+      setProductForm(prev => ({
+        ...prev,
+        sizes: ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL'].map(sz => ({ size: sz, stock: 10, isSoldOut: false })),
+      }));
+    } else if (presetType === 'freesize') {
+      setProductForm(prev => ({
+        ...prev,
+        sizes: [{ size: 'Free Size', stock: 30, isSoldOut: false }],
+      }));
+    }
+  };
+
   // Save Product (Create or Update)
   const handleSaveProduct = async (e) => {
     e.preventDefault();
+    if (!productForm.name || !productForm.name.trim()) {
+      showToast('Please enter a garment name', 'error');
+      return;
+    }
+    if (productForm.price === '' || isNaN(Number(productForm.price)) || Number(productForm.price) <= 0) {
+      showToast('Please enter a valid price greater than 0', 'error');
+      return;
+    }
+
     setLoading(true);
     try {
-      // Filter out empty images
-      const cleanImages = productForm.images.filter(img => img && img.trim() !== '');
+      const cleanImages = (productForm.images || []).filter(img => img && typeof img === 'string' && img.trim() !== '');
+      const validSizes = (productForm.sizes || []).filter(s => s.size && Number(s.stock) >= 0);
+      const totalStock = validSizes.reduce((acc, s) => acc + (Number(s.stock) || 0), 0);
+
       const payload = {
         ...productForm,
-        images: cleanImages.length > 0 ? cleanImages : ['https://lh3.googleusercontent.com/aida-public/AB6AXuB1bs-UKDZDm7hd3cHOIWB8fIAlq8YlxvU1hgjx3MmUyxGAk7KBbZ6UV-uGdR1LaVtONjR7nlEoRPDqOpo0yQQdSUtY0L3Z-dO_PVYHPpTRoqtx0jaTGEbef0-ESiFB8pB8rZYzvIdTC3r7BsbtKahxYIfR_3sd4CL8O-iVT_B3Rb9WxVSF_sUquSiW0fN9ja1NjMwXvFYHZEd8Ivn2RK_ue1E9b7PxXAEWslU7VJkTRjU99pzLh7Va'],
+        name: productForm.name.trim(),
+        images: cleanImages.length > 0 ? cleanImages : ['https://images.pexels.com/photos/297933/pexels-photo-297933.jpeg?auto=compress&cs=tinysrgb&w=600'],
+        sizes: validSizes.length > 0 ? validSizes : [{ size: 'Free Size', stock: 10, isSoldOut: false }],
         price: Number(productForm.price),
-        originalPrice: productForm.originalPrice ? Number(productForm.originalPrice) : null,
+        originalPrice: productForm.originalPrice && Number(productForm.originalPrice) > 0 ? Number(productForm.originalPrice) : null,
+        stock: totalStock,
+        stockStatus: totalStock > 0 && productForm.inStock ? 'In Stock' : 'Out of Stock',
+        color: productForm.color?.trim() || '',
+        category: productForm.category || 'Shirts',
+        badge: productForm.badge?.trim() || null,
       };
 
       if (editingProduct && (editingProduct._id || editingProduct.id)) {
@@ -1083,7 +1270,7 @@ export default function AdminPage() {
 
   // Save Site Configuration
   const handleSaveConfig = async (e) => {
-    e.preventDefault();
+    if (e && e.preventDefault) e.preventDefault();
     setLoading(true);
     try {
       // Always persist locally so changes survive without a backend
@@ -1200,24 +1387,10 @@ export default function AdminPage() {
     }
   };
 
-  // Handle Image File Upload
-  const handleImageUpload = async (e, index) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    setUploadingImage(true);
-    try {
-      const res = await uploadProductImage(file);
-      if (res?.url) {
-        const updatedImgs = [...productForm.images];
-        updatedImgs[index] = res.url;
-        setProductForm(prev => ({ ...prev, images: updatedImgs }));
-        showToast('Image uploaded successfully');
-      }
-    } catch (err) {
-      showToast('Upload error. You can also paste an image URL directly.', 'error');
-    } finally {
-      setUploadingImage(false);
+  // Handle single or multi image file input
+  const handleSingleImageUpload = (e) => {
+    if (e.target.files && e.target.files.length > 0) {
+      handleFilesUpload(e.target.files);
     }
   };
 
@@ -1373,6 +1546,104 @@ export default function AdminPage() {
           gap: 8px;
           max-width: calc(100vw - 32px);
           box-sizing: border-box;
+        }
+        .admin-product-modal-card {
+          width: 100%;
+          max-width: 980px;
+          background: var(--surface-container-low);
+          border-radius: 18px;
+          border: 1px solid var(--outline-variant);
+          padding: 1.75rem 2rem;
+          max-height: 92vh;
+          overflow-y: auto;
+          display: flex;
+          flex-direction: column;
+          gap: 16px;
+          box-shadow: 0 24px 60px rgba(0,0,0,0.7);
+          box-sizing: border-box;
+        }
+        .admin-product-layout {
+          display: grid;
+          grid-template-columns: 1fr 310px;
+          gap: 22px;
+          align-items: start;
+        }
+        .admin-form-section {
+          background: var(--surface-container-lowest);
+          border: 1px solid var(--outline-variant);
+          border-radius: 12px;
+          padding: 14px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 10px;
+        }
+        .admin-section-label {
+          font-size: 10px;
+          font-weight: 800;
+          text-transform: uppercase;
+          letter-spacing: 0.1em;
+          color: var(--on-surface-variant);
+          margin-bottom: 2px;
+        }
+        .admin-input {
+          width: 100%;
+          padding: 10px 12px;
+          border-radius: 8px;
+          background: var(--surface-container);
+          border: 1px solid var(--outline-variant);
+          color: var(--on-surface);
+          font-size: 13px;
+          box-sizing: border-box;
+          font-family: inherit;
+          transition: border-color 0.15s;
+        }
+        .admin-input:focus {
+          outline: none;
+          border-color: var(--primary);
+        }
+        .admin-dropzone {
+          border: 2px dashed var(--outline-variant);
+          border-radius: 12px;
+          padding: 18px 14px;
+          text-align: center;
+          background: var(--surface-container-lowest);
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+        .admin-dropzone:hover, .admin-dropzone.active {
+          border-color: var(--primary);
+          background: rgba(212, 175, 55, 0.05);
+        }
+        .admin-chip {
+          padding: 6px 12px;
+          border-radius: 20px;
+          border: 1px solid var(--outline-variant);
+          background: var(--surface-container);
+          color: var(--on-surface-variant);
+          font-size: 11px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          user-select: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+        }
+        .admin-chip:hover {
+          border-color: var(--primary);
+          color: var(--on-surface);
+        }
+        .admin-chip.active {
+          background: var(--primary);
+          color: #000;
+          border-color: var(--primary);
+          font-weight: 700;
+        }
+
+        @media (max-width: 960px) {
+          .admin-product-layout {
+            grid-template-columns: 1fr !important;
+          }
         }
 
         @media (max-width: 768px) {
@@ -2557,290 +2828,352 @@ export default function AdminPage() {
 
         {/* ==================== TAB 2: HERO & DROPS CONFIG ==================== */}
         {activeTab === 'config' && (
-          <div className="admin-card-container" style={{ maxWidth: 800 }}>
-            <h3 className="text-headline-sm text-on-surface" style={{ textTransform: 'uppercase', margin: '0 0 4px' }}>
-              Live Storefront & Drop Customizer
-            </h3>
-            <p className="text-body-sm text-on-surface-variant" style={{ margin: '0 0 24px' }}>
-              Changes made here update the homepage hero section, announcement ticker, and winter countdown banner immediately.
-            </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 860 }}>
 
-            <form onSubmit={handleSaveConfig} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            {/* ─── Header ──────────────────────────────────────────────────── */}
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
               <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                  Top Marquee Announcement Ticker
-                </label>
-                <input
-                  type="text"
-                  value={siteConfig.marqueeText || ''}
-                  onChange={(e) => setSiteConfig({ ...siteConfig, marqueeText: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 8,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 13,
-                    boxSizing: 'border-box',
-                  }}
-                />
+                <h3 className="text-headline-sm text-on-surface" style={{ textTransform: 'uppercase', margin: '0 0 4px' }}>
+                  Hero &amp; Drops
+                </h3>
+                <p className="text-body-sm text-on-surface-variant" style={{ margin: 0 }}>
+                  Manage homepage carousel slides and seasonal drop banners.
+                </p>
               </div>
-
-              <div className="admin-grid-2col">
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                    Hero Badge / Tag
-                  </label>
-                  <input
-                    type="text"
-                    value={siteConfig.heroDropTag || ''}
-                    onChange={(e) => setSiteConfig({ ...siteConfig, heroDropTag: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                    Hero Headline
-                  </label>
-                  <input
-                    type="text"
-                    value={siteConfig.heroHeadline || ''}
-                    onChange={(e) => setSiteConfig({ ...siteConfig, heroHeadline: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                  Hero Subheadline Description
-                </label>
-                <textarea
-                  rows={3}
-                  value={siteConfig.heroSubheadline || ''}
-                  onChange={(e) => setSiteConfig({ ...siteConfig, heroSubheadline: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 8,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 13,
-                    resize: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                  Hero Banner Image URL
-                </label>
-                <input
-                  type="text"
-                  value={siteConfig.heroImage || ''}
-                  onChange={(e) => setSiteConfig({ ...siteConfig, heroImage: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '12px 14px',
-                    borderRadius: 8,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 13,
-                    boxSizing: 'border-box',
-                  }}
-                />
-                {siteConfig.heroImage && (
-                  <div style={{ marginTop: 10, width: '100%', height: 160, borderRadius: 8, overflow: 'hidden' }}>
-                    <img src={siteConfig.heroImage} alt="Hero preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  </div>
-                )}
-              </div>
-
-              {/* ─── Winter Drop Section Control ─────────────────────── */}
-              <div style={{
-                marginTop: 8,
-                padding: '16px',
-                borderRadius: 12,
-                border: '1px solid var(--outline-variant)',
-                background: siteConfig.showWinterDrop
-                  ? 'linear-gradient(135deg, rgba(0,120,200,0.07) 0%, rgba(0,80,160,0.04) 100%)'
-                  : 'var(--surface-container-lowest)',
-                boxSizing: 'border-box',
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-                  <div>
-                    <div className="text-label-caps text-on-surface" style={{ marginBottom: 2 }}>
-                      ❄️ Winter Drop Section
-                    </div>
-                    <div className="text-body-sm text-on-surface-variant">
-                      {siteConfig.showWinterDrop ? 'Currently VISIBLE on homepage' : 'Currently HIDDEN from homepage'}
-                    </div>
-                  </div>
-                  {/* Toggle Switch */}
-                  <button
-                    type="button"
-                    onClick={() => setSiteConfig({ ...siteConfig, showWinterDrop: !siteConfig.showWinterDrop })}
-                    style={{
-                      position: 'relative',
-                      width: 52,
-                      height: 28,
-                      borderRadius: 999,
-                      border: 'none',
-                      cursor: 'pointer',
-                      transition: 'background 0.25s ease',
-                      background: siteConfig.showWinterDrop ? 'var(--primary, #1d6fc4)' : 'var(--outline-variant, #ccc)',
-                      flexShrink: 0,
-                    }}
-                    aria-label="Toggle Winter Drop visibility"
-                  >
-                    <span style={{
-                      position: 'absolute',
-                      top: 3,
-                      left: siteConfig.showWinterDrop ? 26 : 3,
-                      width: 22,
-                      height: 22,
-                      borderRadius: '50%',
-                      background: '#ffffff',
-                      transition: 'left 0.25s ease',
-                      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
-                    }} />
-                  </button>
-                </div>
-
-                {siteConfig.showWinterDrop && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 4 }}>
-                    <div className="admin-grid-2col">
-                      <div>
-                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                          Drop Section Title
-                        </label>
-                        <input
-                          type="text"
-                          value={siteConfig.winterDropTitle || ''}
-                          onChange={(e) => setSiteConfig({ ...siteConfig, winterDropTitle: e.target.value })}
-                          placeholder="e.g. WINTER DROP 01"
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            borderRadius: 8,
-                            background: 'var(--surface-container-lowest)',
-                            border: '1px solid var(--outline-variant)',
-                            color: 'var(--on-surface)',
-                            fontSize: 13,
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      </div>
-                      <div>
-                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                          CTA Button Text
-                        </label>
-                        <input
-                          type="text"
-                          value={siteConfig.winterDropCta || ''}
-                          onChange={(e) => setSiteConfig({ ...siteConfig, winterDropCta: e.target.value })}
-                          placeholder="e.g. Shop Winter Drop"
-                          style={{
-                            width: '100%',
-                            padding: '10px 12px',
-                            borderRadius: 8,
-                            background: 'var(--surface-container-lowest)',
-                            border: '1px solid var(--outline-variant)',
-                            color: 'var(--on-surface)',
-                            fontSize: 13,
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                        Drop Section Subtitle
-                      </label>
-                      <textarea
-                        rows={2}
-                        value={siteConfig.winterDropSubtitle || ''}
-                        onChange={(e) => setSiteConfig({ ...siteConfig, winterDropSubtitle: e.target.value })}
-                        placeholder="Short description of this drop..."
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          background: 'var(--surface-container-lowest)',
-                          border: '1px solid var(--outline-variant)',
-                          color: 'var(--on-surface)',
-                          fontSize: 13,
-                          resize: 'vertical',
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 6 }}>
-                        Drop Background Image URL (optional)
-                      </label>
-                      <input
-                        type="text"
-                        value={siteConfig.winterDropImage || ''}
-                        onChange={(e) => setSiteConfig({ ...siteConfig, winterDropImage: e.target.value })}
-                        placeholder="https://..."
-                        style={{
-                          width: '100%',
-                          padding: '10px 12px',
-                          borderRadius: 8,
-                          background: 'var(--surface-container-lowest)',
-                          border: '1px solid var(--outline-variant)',
-                          color: 'var(--on-surface)',
-                          fontSize: 13,
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
-
               <button
-                type="submit"
+                onClick={handleSaveConfig}
                 disabled={loading}
                 className="btn-primary"
-                style={{
-                  padding: '14px',
-                  borderRadius: 8,
-                  fontSize: 13,
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.08em',
-                  cursor: 'pointer',
-                  marginTop: 10,
-                }}
+                style={{ padding: '10px 22px', borderRadius: 8, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', flexShrink: 0 }}
               >
-                {loading ? 'Publishing...' : 'Publish Live Updates'}
+                {loading ? 'Saving…' : '✓ Publish Changes'}
               </button>
-            </form>
+            </div>
+
+            {/* ─── Payment Methods: COD Toggle ────────────────────────────── */}
+            <div style={{ padding: 18, background: 'var(--surface-container-low)', borderRadius: 12, border: '1px solid var(--outline-variant)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                <div style={{ width: 44, height: 44, borderRadius: 10, background: siteConfig.enableCod !== false ? 'rgba(34,197,94,0.15)' : 'var(--surface-container-highest)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: siteConfig.enableCod !== false ? '#16a34a' : 'var(--on-surface-variant)', flexShrink: 0 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 24 }}>payments</span>
+                </div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--on-surface)', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Cash On Delivery (COD)</span>
+                    <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', textTransform: 'uppercase', background: siteConfig.enableCod !== false ? 'rgba(34,197,94,0.15)' : 'var(--surface-variant)', color: siteConfig.enableCod !== false ? '#16a34a' : 'var(--on-surface-variant)' }}>
+                      {siteConfig.enableCod !== false ? 'ENABLED' : 'DISABLED'}
+                    </span>
+                  </div>
+                  <div className="text-body-sm text-on-surface-variant" style={{ marginTop: 2, fontSize: 12 }}>
+                    {siteConfig.enableCod !== false
+                      ? 'Customers can select Cash on Delivery or Pay online via Razorpay.'
+                      : 'COD is disabled at checkout. Customers are required to pay online via Razorpay.'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Toggle switch */}
+              <button
+                type="button"
+                onClick={async () => {
+                  const newStatus = siteConfig.enableCod === false ? true : false;
+                  const updated = { ...siteConfig, enableCod: newStatus };
+                  setSiteConfig(updated);
+                  try {
+                    localStorage.setItem('penguin_site_config', JSON.stringify(updated));
+                    await updateSiteConfig({ enableCod: newStatus });
+                    showToast(newStatus ? 'Cash On Delivery ENABLED' : 'Cash On Delivery DISABLED');
+                  } catch (err) {
+                    showToast(newStatus ? 'COD enabled (local)' : 'COD disabled (local)');
+                  }
+                }}
+                style={{
+                  position: 'relative',
+                  width: 48,
+                  height: 26,
+                  borderRadius: 999,
+                  border: 'none',
+                  cursor: 'pointer',
+                  transition: 'background 0.25s',
+                  background: siteConfig.enableCod !== false ? '#16a34a' : 'var(--outline-variant)',
+                  flexShrink: 0,
+                }}
+                aria-label="Toggle Cash On Delivery"
+              >
+                <span style={{
+                  position: 'absolute',
+                  top: 3,
+                  left: siteConfig.enableCod !== false ? 25 : 3,
+                  width: 20,
+                  height: 20,
+                  borderRadius: '50%',
+                  background: '#fff',
+                  transition: 'left 0.25s',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
+                }} />
+              </button>
+            </div>
+
+            {/* ─── Marquee Ticker ──────────────────────────────────────────── */}
+            <div style={{ padding: 16, background: 'var(--surface-container-low)', borderRadius: 12, border: '1px solid var(--outline-variant)' }}>
+              <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 8 }}>
+                📢 Announcement Ticker
+              </label>
+              <input
+                type="text"
+                value={siteConfig.marqueeText || ''}
+                onChange={(e) => setSiteConfig({ ...siteConfig, marqueeText: e.target.value })}
+                placeholder="e.g. FW25 Drop 01 Available • Free Express Shipping"
+                style={{ width: '100%', padding: '10px 12px', borderRadius: 8, background: 'var(--surface-container-lowest)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', fontSize: 13, boxSizing: 'border-box' }}
+              />
+            </div>
+
+            {/* ─── Hero Carousel Slides ─────────────────────────────────────── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div className="text-label-caps text-on-surface">🎞️ Hero Carousel Slides</div>
+                  <div className="text-body-sm text-on-surface-variant" style={{ marginTop: 2 }}>
+                    {(siteConfig.heroSlides || []).length} slide{(siteConfig.heroSlides || []).length !== 1 ? 's' : ''} — displayed as full-screen rotating banner
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newSlide = { id: Date.now(), tag: '', title: '', subtitle: '', cta: 'SHOP NOW', link: '/collection', img: '' };
+                    setSiteConfig({ ...siteConfig, heroSlides: [...(siteConfig.heroSlides || []), newSlide] });
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px dashed var(--primary)', background: 'transparent', color: 'var(--primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
+                  Add Slide
+                </button>
+              </div>
+
+              {(siteConfig.heroSlides || []).map((slide, idx) => (
+                <div
+                  key={slide.id}
+                  style={{ background: 'var(--surface-container-low)', borderRadius: 12, border: '1px solid var(--outline-variant)', overflow: 'hidden' }}
+                >
+                  {/* Slide top bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface-container)' }}>
+                    <span className="text-label-caps text-on-surface-variant" style={{ fontSize: 10 }}>SLIDE {idx + 1}</span>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      {idx > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const slides = [...(siteConfig.heroSlides || [])];
+                            [slides[idx - 1], slides[idx]] = [slides[idx], slides[idx - 1]];
+                            setSiteConfig({ ...siteConfig, heroSlides: slides });
+                          }}
+                          title="Move up"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)', fontSize: 16 }}
+                        >↑</button>
+                      )}
+                      {idx < (siteConfig.heroSlides || []).length - 1 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const slides = [...(siteConfig.heroSlides || [])];
+                            [slides[idx], slides[idx + 1]] = [slides[idx + 1], slides[idx]];
+                            setSiteConfig({ ...siteConfig, heroSlides: slides });
+                          }}
+                          title="Move down"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--on-surface-variant)', fontSize: 16 }}
+                        >↓</button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const slides = (siteConfig.heroSlides || []).filter((_, i) => i !== idx);
+                          setSiteConfig({ ...siteConfig, heroSlides: slides });
+                        }}
+                        title="Remove slide"
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: 14, fontWeight: 700 }}
+                      >✕</button>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Image URL + preview */}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      {slide.img && (
+                        <div style={{ width: 90, height: 58, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+                          <img src={slide.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Image URL</label>
+                        <input
+                          type="text"
+                          value={slide.img || ''}
+                          onChange={(e) => {
+                            const slides = [...(siteConfig.heroSlides || [])];
+                            slides[idx] = { ...slides[idx], img: e.target.value };
+                            setSiteConfig({ ...siteConfig, heroSlides: slides });
+                          }}
+                          placeholder="https://..."
+                          style={{ width: '100%', padding: '8px 10px', borderRadius: 7, background: 'var(--surface-container-lowest)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', fontSize: 12, boxSizing: 'border-box' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Badge / Tag</label>
+                        <input type="text" value={slide.tag || ''} onChange={(e) => { const s = [...(siteConfig.heroSlides||[])]; s[idx]={...s[idx],tag:e.target.value}; setSiteConfig({...siteConfig,heroSlides:s}); }} placeholder="e.g. NEW FW25" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>CTA Button Text</label>
+                        <input type="text" value={slide.cta || ''} onChange={(e) => { const s = [...(siteConfig.heroSlides||[])]; s[idx]={...s[idx],cta:e.target.value}; setSiteConfig({...siteConfig,heroSlides:s}); }} placeholder="SHOP COLLECTION" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Headline</label>
+                      <input type="text" value={slide.title || ''} onChange={(e) => { const s = [...(siteConfig.heroSlides||[])]; s[idx]={...s[idx],title:e.target.value}; setSiteConfig({...siteConfig,heroSlides:s}); }} placeholder="THE STREETWEAR & LINEN EDIT" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box', fontWeight:600 }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Subtitle</label>
+                        <input type="text" value={slide.subtitle || ''} onChange={(e) => { const s = [...(siteConfig.heroSlides||[])]; s[idx]={...s[idx],subtitle:e.target.value}; setSiteConfig({...siteConfig,heroSlides:s}); }} placeholder="Short description..." style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Link</label>
+                        <input type="text" value={slide.link || ''} onChange={(e) => { const s = [...(siteConfig.heroSlides||[])]; s[idx]={...s[idx],link:e.target.value}; setSiteConfig({...siteConfig,heroSlides:s}); }} placeholder="/collection" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {(siteConfig.heroSlides || []).length === 0 && (
+                <div style={{ padding: '32px 20px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 12, color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                  No slides yet — click "Add Slide" to create your first hero banner.
+                </div>
+              )}
+            </div>
+
+            {/* ─── Seasonal Drops ────────────────────────────────────────────── */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div>
+                  <div className="text-label-caps text-on-surface">🔥 Seasonal Drop Banners</div>
+                  <div className="text-body-sm text-on-surface-variant" style={{ marginTop: 2 }}>
+                    Full-width promotional sections shown on the homepage
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const newDrop = { id: Date.now(), name: 'New Drop', title: 'DROP TITLE', subtitle: '', cta: 'Shop Now', link: '/collection', img: '', isVisible: true };
+                    setSiteConfig({ ...siteConfig, drops: [...(siteConfig.drops || []), newDrop] });
+                  }}
+                  style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', borderRadius: 8, border: '1px dashed var(--primary)', background: 'transparent', color: 'var(--primary)', fontSize: 12, fontWeight: 600, cursor: 'pointer', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+                >
+                  <span className="material-symbols-outlined" style={{ fontSize: 15 }}>add</span>
+                  Add Drop
+                </button>
+              </div>
+
+              {(siteConfig.drops || []).map((drop, idx) => (
+                <div
+                  key={drop.id}
+                  style={{ background: drop.isVisible ? 'var(--surface-container-low)' : 'var(--surface-container-lowest)', borderRadius: 12, border: `1px solid ${drop.isVisible ? 'var(--primary)' : 'var(--outline-variant)'}`, opacity: drop.isVisible ? 1 : 0.6, transition: 'all 0.2s' }}
+                >
+                  {/* Drop top bar */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 14px', borderBottom: '1px solid var(--outline-variant)', background: 'var(--surface-container)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span className="text-label-caps text-on-surface-variant" style={{ fontSize: 10 }}>{drop.name || `DROP ${idx + 1}`}</span>
+                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', background: drop.isVisible ? 'rgba(34,197,94,0.15)' : 'var(--surface-variant)', color: drop.isVisible ? '#16a34a' : 'var(--on-surface-variant)' }}>
+                        {drop.isVisible ? 'LIVE' : 'HIDDEN'}
+                      </span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      {/* Visibility toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const drops = [...(siteConfig.drops || [])];
+                          drops[idx] = { ...drops[idx], isVisible: !drops[idx].isVisible };
+                          setSiteConfig({ ...siteConfig, drops });
+                        }}
+                        style={{ position: 'relative', width: 40, height: 22, borderRadius: 999, border: 'none', cursor: 'pointer', transition: 'background 0.25s', background: drop.isVisible ? '#16a34a' : 'var(--outline-variant)', flexShrink: 0 }}
+                        aria-label="Toggle drop visibility"
+                      >
+                        <span style={{ position: 'absolute', top: 2, left: drop.isVisible ? 20 : 2, width: 18, height: 18, borderRadius: '50%', background: '#fff', transition: 'left 0.25s', boxShadow: '0 1px 3px rgba(0,0,0,0.25)' }} />
+                      </button>
+                      <button type="button" onClick={() => { const drops=(siteConfig.drops||[]).filter((_,i)=>i!==idx); setSiteConfig({...siteConfig,drops}); }} style={{ background:'none', border:'none', cursor:'pointer', color:'#ef4444', fontSize:14, fontWeight:700 }}>✕</button>
+                    </div>
+                  </div>
+
+                  <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {/* Image + name row */}
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                      {drop.img && (
+                        <div style={{ width: 90, height: 58, borderRadius: 8, overflow: 'hidden', flexShrink: 0 }}>
+                          <img src={drop.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Image URL</label>
+                        <input
+                          type="text"
+                          value={drop.img || ''}
+                          onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],img:e.target.value}; setSiteConfig({...siteConfig,drops}); }}
+                          placeholder="https://..."
+                          style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Internal Name</label>
+                        <input type="text" value={drop.name || ''} onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],name:e.target.value}; setSiteConfig({...siteConfig,drops}); }} placeholder="e.g. Winter Drop 01" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>CTA Button</label>
+                        <input type="text" value={drop.cta || ''} onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],cta:e.target.value}; setSiteConfig({...siteConfig,drops}); }} placeholder="Shop Now" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Display Title</label>
+                      <input type="text" value={drop.title || ''} onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],title:e.target.value}; setSiteConfig({...siteConfig,drops}); }} placeholder="WINTER DROP 01" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box', fontWeight:600 }} />
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 10 }}>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Subtitle</label>
+                        <input type="text" value={drop.subtitle || ''} onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],subtitle:e.target.value}; setSiteConfig({...siteConfig,drops}); }} placeholder="Limited edition drop..." style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                      <div>
+                        <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 5, fontSize: 10 }}>Link</label>
+                        <input type="text" value={drop.link || ''} onChange={(e) => { const drops=[...(siteConfig.drops||[])]; drops[idx]={...drops[idx],link:e.target.value}; setSiteConfig({...siteConfig,drops}); }} placeholder="/collection" style={{ width:'100%', padding:'8px 10px', borderRadius:7, background:'var(--surface-container-lowest)', border:'1px solid var(--outline-variant)', color:'var(--on-surface)', fontSize:12, boxSizing:'border-box' }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {(siteConfig.drops || []).length === 0 && (
+                <div style={{ padding: '32px 20px', textAlign: 'center', border: '1px dashed var(--outline-variant)', borderRadius: 12, color: 'var(--on-surface-variant)', fontSize: 13 }}>
+                  No drops configured — click "Add Drop" to create a seasonal promotion banner.
+                </div>
+              )}
+            </div>
+
+            {/* ─── Bottom Save ─────────────────────────────────────────────────── */}
+            <button
+              onClick={handleSaveConfig}
+              disabled={loading}
+              className="btn-primary"
+              style={{ padding: '13px', borderRadius: 8, fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer' }}
+            >
+              {loading ? 'Publishing…' : '✓ Publish Live Updates'}
+            </button>
           </div>
         )}
 
@@ -3600,331 +3933,306 @@ export default function AdminPage() {
 
       {/* ==================== ADD / EDIT GARMENT MODAL ==================== */}
       {isModalOpen && (
-        <div className="admin-modal-backdrop">
-          <div className="admin-modal-card">
+        <div className="admin-modal-backdrop" onClick={(e) => { if (e.target === e.currentTarget) setIsModalOpen(false); }}>
+          <div className="admin-product-modal-card">
+
+            {/* ── Header ─────────────────────────────────────────────────── */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 className="text-headline-sm text-on-surface" style={{ textTransform: 'uppercase', margin: 0, fontSize: 'clamp(16px, 3.5vw, 20px)' }}>
-                {editingProduct ? 'Edit Garment Details' : 'Add New Garment to Atelier'}
-              </h3>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.12em', color: 'var(--primary)', marginBottom: 3 }}>
+                  {editingProduct ? 'Edit Garment' : 'New Garment'}
+                </div>
+                <div style={{ fontSize: 18, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '-0.01em', color: 'var(--on-surface)', lineHeight: 1 }}>
+                  {editingProduct ? (productForm.name || 'Edit Product') : 'Add to Atelier'}
+                </div>
+              </div>
               <button
                 onClick={() => setIsModalOpen(false)}
-                style={{ background: 'none', border: 'none', color: 'var(--on-surface-variant)', cursor: 'pointer', fontSize: 24, padding: 4 }}
-              >
-                ✕
-              </button>
+                style={{ background: 'var(--surface-container)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)', cursor: 'pointer', borderRadius: '50%', width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}
+              >✕</button>
             </div>
 
-            <form onSubmit={handleSaveProduct} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                  Garment Name *
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={productForm.name}
-                  onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
-                  placeholder="e.g. Structured Wool Overshirt"
-                  style={{
-                    width: '100%',
-                    padding: '10px 14px',
-                    borderRadius: 8,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 13,
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+            <form onSubmit={handleSaveProduct}>
+              <div className="admin-product-layout">
 
-              <div className="admin-grid-2col">
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                    Category *
-                  </label>
-                  <select
-                    value={productForm.category}
-                    onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  >
-                    {(categories.length > 0 ? categories : DEFAULT_CATEGORIES.map(n => ({ name: n }))).map(c => (
-                      <option key={c._id || c.name} value={c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
+                {/* ── Left: Form Fields ───────────────────────────────────── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                    Colorway Name
-                  </label>
-                  <input
-                    type="text"
-                    value={productForm.color}
-                    onChange={(e) => setProductForm({ ...productForm, color: e.target.value })}
-                    placeholder="e.g. Charcoal Melange"
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              <div className="admin-grid-2col">
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                    Price (INR ₹) *
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    value={productForm.price}
-                    onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                    Original Price (Optional)
-                  </label>
-                  <input
-                    type="number"
-                    value={productForm.originalPrice}
-                    onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
-                    placeholder="e.g. 18500"
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-              </div>
-
-              {/* Badges and Drop Toggles */}
-              <div className="admin-grid-2col">
-                <div>
-                  <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                    Product Badge
-                  </label>
-                  <input
-                    type="text"
-                    value={productForm.badge}
-                    onChange={(e) => setProductForm({ ...productForm, badge: e.target.value })}
-                    placeholder="e.g. Drop 01, Limited, Organic"
-                    style={{
-                      width: '100%',
-                      padding: '10px 14px',
-                      borderRadius: 8,
-                      background: 'var(--surface-container-lowest)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 13,
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, cursor: 'pointer', color: 'var(--on-surface)' }}>
+                  {/* Basic Info */}
+                  <div className="admin-form-section">
+                    <div className="admin-section-label">Basic Information</div>
                     <input
-                      type="checkbox"
-                      checked={productForm.isWinterDrop}
-                      onChange={(e) => setProductForm({ ...productForm, isWinterDrop: e.target.checked })}
+                      type="text" required
+                      value={productForm.name}
+                      onChange={(e) => setProductForm({ ...productForm, name: e.target.value })}
+                      placeholder="Garment name *"
+                      className="admin-input"
                     />
-                    Feature in Winter Drop
-                  </label>
-                </div>
-              </div>
-
-              {/* Garment Images */}
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                  Garment Image URLs / Upload *
-                </label>
-                {productForm.images.map((img, idx) => (
-                  <div key={idx} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
-                    <input
-                      type="text"
-                      value={img}
-                      onChange={(e) => {
-                        const updated = [...productForm.images];
-                        updated[idx] = e.target.value;
-                        setProductForm({ ...productForm, images: updated });
-                      }}
-                      placeholder="Paste Image URL..."
-                      style={{
-                        flex: 1,
-                        padding: '8px 12px',
-                        borderRadius: 6,
-                        background: 'var(--surface-container-lowest)',
-                        border: '1px solid var(--outline-variant)',
-                        color: 'var(--on-surface)',
-                        fontSize: 12,
-                        boxSizing: 'border-box',
-                        minWidth: 0,
-                      }}
-                    />
-
-                    <label style={{
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      background: 'var(--surface-container)',
-                      border: '1px solid var(--outline-variant)',
-                      color: 'var(--on-surface)',
-                      fontSize: 11,
-                      cursor: 'pointer',
-                      whiteSpace: 'nowrap',
-                      flexShrink: 0,
-                    }}>
-                      Upload
-                      <input
-                        type="file"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={(e) => handleImageUpload(e, idx)}
-                      />
-                    </label>
-
-                    {productForm.images.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const updated = productForm.images.filter((_, i) => i !== idx);
-                          setProductForm({ ...productForm, images: updated });
-                        }}
-                        style={{ background: 'none', border: 'none', color: '#f87171', cursor: 'pointer', padding: 4 }}
+                    <div className="admin-grid-2col">
+                      <select
+                        value={productForm.category}
+                        onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
+                        className="admin-input"
                       >
-                        ✕
+                        {(categories.length > 0 ? categories : DEFAULT_CATEGORIES.map(n => ({ name: n }))).map(c => (
+                          <option key={c._id || c.name} value={c.name}>{c.name}</option>
+                        ))}
+                      </select>
+                      <input
+                        type="text"
+                        value={productForm.color}
+                        onChange={(e) => setProductForm({ ...productForm, color: e.target.value })}
+                        placeholder="Colorway (optional)"
+                        className="admin-input"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Pricing */}
+                  <div className="admin-form-section">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="admin-section-label">Pricing</div>
+                      {productForm.originalPrice && Number(productForm.originalPrice) > Number(productForm.price) && (
+                        <span style={{ fontSize: 10, background: 'rgba(239,68,68,0.12)', color: '#ef4444', padding: '2px 7px', borderRadius: 4, fontWeight: 700 }}>
+                          {Math.round(((Number(productForm.originalPrice) - Number(productForm.price)) / Number(productForm.originalPrice)) * 100)}% OFF
+                        </span>
+                      )}
+                    </div>
+                    <div className="admin-grid-2col">
+                      <input
+                        type="number" required min="1"
+                        value={productForm.price}
+                        onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
+                        placeholder="Selling price ₹ *"
+                        className="admin-input"
+                        style={{ fontWeight: 700 }}
+                      />
+                      <input
+                        type="number"
+                        value={productForm.originalPrice}
+                        onChange={(e) => setProductForm({ ...productForm, originalPrice: e.target.value })}
+                        placeholder="MRP / Original ₹"
+                        className="admin-input"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Images */}
+                  <div className="admin-form-section">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <div className="admin-section-label">Images</div>
+                      <span style={{ fontSize: 10, color: 'var(--on-surface-variant)' }}>
+                        {productForm.images?.filter(Boolean).length || 0} added
+                      </span>
+                    </div>
+
+                    {/* Drag & Drop */}
+                    <div
+                      className={`admin-dropzone ${dragActive ? 'active' : ''}`}
+                      onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
+                      onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); }}
+                      onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(true); }}
+                      onDrop={(e) => { e.preventDefault(); e.stopPropagation(); setDragActive(false); if (e.dataTransfer.files?.length) handleFilesUpload(e.dataTransfer.files); }}
+                      onClick={() => document.getElementById('product-file-upload-input')?.click()}
+                    >
+                      <input id="product-file-upload-input" type="file" multiple accept="image/*" style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.length) handleFilesUpload(e.target.files); }} />
+                      <span className="material-symbols-outlined" style={{ fontSize: 24, color: 'var(--primary)', marginBottom: 4 }}>cloud_upload</span>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--on-surface)' }}>
+                        {uploadingImage ? 'Uploading…' : 'Click or drag photos here'}
+                      </div>
+                      <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', marginTop: 2 }}>JPG, PNG, WEBP</div>
+                    </div>
+
+                    {/* URL Input */}
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <input
+                        type="text" value={urlImageInput}
+                        onChange={(e) => setUrlImageInput(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleAddImageUrl(); } }}
+                        placeholder="Or paste image URL"
+                        className="admin-input" style={{ flex: 1 }}
+                      />
+                      <button type="button" onClick={handleAddImageUrl} style={{ padding: '8px 14px', borderRadius: 7, background: 'var(--surface-container)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface)', fontSize: 12, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}>
+                        Add
                       </button>
+                    </div>
+
+                    {/* Thumbnails */}
+                    {productForm.images?.filter(Boolean).length > 0 && (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(72px, 1fr))', gap: 8 }}>
+                        {productForm.images.filter(Boolean).map((imgUrl, imgIdx) => (
+                          <div key={imgIdx} style={{ position: 'relative', borderRadius: 7, overflow: 'hidden', border: imgIdx === 0 ? '2px solid var(--primary)' : '1px solid var(--outline-variant)', aspectRatio: '3/4', background: '#000' }}>
+                            <img src={imgUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            {imgIdx === 0 && <span style={{ position: 'absolute', top: 3, left: 3, background: 'var(--primary)', color: '#000', fontSize: 7, fontWeight: 900, padding: '1px 4px', borderRadius: 3, textTransform: 'uppercase' }}>Cover</span>}
+                            <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4, opacity: 0, transition: 'opacity 0.2s' }}
+                              onMouseEnter={(e) => { e.currentTarget.style.opacity = '1'; }} onMouseLeave={(e) => { e.currentTarget.style.opacity = '0'; }}>
+                              {imgIdx !== 0 && <button type="button" onClick={() => handleSetCoverImage(imgIdx)} style={{ background: 'var(--primary)', color: '#000', border: 'none', borderRadius: 3, padding: '2px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>Cover</button>}
+                              <button type="button" onClick={() => handleRemoveImage(imgIdx)} style={{ background: '#dc2626', color: '#fff', border: 'none', borderRadius: 3, padding: '2px 5px', fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>✕</button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     )}
                   </div>
-                ))}
 
-                <button
-                  type="button"
-                  onClick={() => setProductForm({ ...productForm, images: [...productForm.images, ''] })}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: 'var(--primary-container)',
-                    fontSize: 11,
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    marginTop: 4,
-                  }}
-                >
-                  + Add another angle image
-                </button>
-              </div>
+                  {/* Sizes & Stock */}
+                  <div className="admin-form-section">
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+                      <div className="admin-section-label">Sizes &amp; Stock</div>
+                      <div style={{ display: 'flex', gap: 5 }}>
+                        {[['standard', 'S–XL'], ['all', 'XS–3XL'], ['freesize', 'Free']].map(([p, l]) => (
+                          <button key={p} type="button" onClick={() => applySizePreset(p)} style={{ padding: '2px 8px', fontSize: 10, background: 'var(--surface-container)', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)', borderRadius: 4, cursor: 'pointer' }}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
 
-              {/* Fabric Specs & Description */}
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                  Fabric & Construction Details
-                </label>
-                <input
-                  type="text"
-                  value={productForm.fabricDetails}
-                  onChange={(e) => setProductForm({ ...productForm, fabricDetails: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 12,
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {AVAILABLE_SIZES.map(sz => {
+                        const isSelected = productForm.sizes.some(s => s.size === sz);
+                        return (
+                          <button key={sz} type="button" onClick={() => toggleSizeOption(sz)} className={`admin-chip ${isSelected ? 'active' : ''}`}>
+                            {sz}
+                          </button>
+                        );
+                      })}
+                    </div>
 
-              <div>
-                <label className="text-label-caps text-on-surface" style={{ display: 'block', marginBottom: 4 }}>
-                  Garment Description
-                </label>
-                <textarea
-                  rows={2}
-                  value={productForm.description}
-                  onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px',
-                    borderRadius: 6,
-                    background: 'var(--surface-container-lowest)',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface)',
-                    fontSize: 12,
-                    resize: 'none',
-                    boxSizing: 'border-box',
-                  }}
-                />
+                    {productForm.sizes.length > 0 ? (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 6 }}>
+                        {productForm.sizes.map(s => (
+                          <div key={s.size} style={{ background: 'var(--surface-container)', border: '1px solid var(--outline-variant)', borderRadius: 6, padding: '6px 10px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--on-surface)' }}>{s.size}</span>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <input type="number" min="0" value={s.stock} onChange={(e) => updateSizeStock(s.size, e.target.value)}
+                                style={{ width: 40, padding: '3px 5px', borderRadius: 4, border: '1px solid var(--outline-variant)', background: 'var(--surface-container-lowest)', color: 'var(--on-surface)', fontSize: 12, textAlign: 'center' }} />
+                              <span style={{ fontSize: 10, color: 'var(--on-surface-variant)' }}>qty</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: '#ef4444' }}>Select at least one size above.</div>
+                    )}
+                  </div>
+
+                  {/* Toggles */}
+                  <div className="admin-form-section">
+                    <div className="admin-section-label">Visibility</div>
+                    <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+                      {[
+                        ['inStock', 'In Stock'],
+                        ['isFeatured', 'Featured on Homepage'],
+                        ['isWinterDrop', 'Winter Drop FW25'],
+                      ].map(([key, label]) => (
+                        <label key={key} style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12, cursor: 'pointer', color: 'var(--on-surface)' }}>
+                          <input type="checkbox" checked={productForm[key]} onChange={(e) => setProductForm({ ...productForm, [key]: e.target.checked })} />
+                          {label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Optional Details (Collapsible) */}
+                  <div className="admin-form-section">
+                    <div onClick={() => setShowAdvancedProductOptions(!showAdvancedProductOptions)}
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer', userSelect: 'none' }}>
+                      <div className="admin-section-label" style={{ margin: 0 }}>Additional Details</div>
+                      <span style={{ fontSize: 11, color: 'var(--primary)', fontWeight: 600 }}>
+                        {showAdvancedProductOptions ? '− Hide' : '+ Show'}
+                      </span>
+                    </div>
+
+                    {showAdvancedProductOptions && (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 10, borderTop: '1px solid var(--outline-variant)' }}>
+                        <div>
+                          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--on-surface-variant)', marginBottom: 5 }}>Badge</div>
+                          <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginBottom: 6 }}>
+                            {BADGE_PRESETS.map(b => (
+                              <button key={b} type="button" onClick={() => setProductForm({ ...productForm, badge: productForm.badge === b ? '' : b })}
+                                className={`admin-chip ${productForm.badge === b ? 'active' : ''}`} style={{ fontSize: 10, padding: '3px 8px' }}>
+                                {b}
+                              </button>
+                            ))}
+                          </div>
+                          <input type="text" value={productForm.badge} onChange={(e) => setProductForm({ ...productForm, badge: e.target.value })}
+                            placeholder="Custom badge (e.g. 50% OFF)" className="admin-input" />
+                        </div>
+                        <input type="text" value={productForm.fabricDetails} onChange={(e) => setProductForm({ ...productForm, fabricDetails: e.target.value })}
+                          placeholder="Fabric & material (e.g. 100% Giza Cotton 180 GSM)" className="admin-input" />
+                        <textarea rows={2} value={productForm.description} onChange={(e) => setProductForm({ ...productForm, description: e.target.value })}
+                          placeholder="Garment description & story…" className="admin-input" style={{ resize: 'none' }} />
+                        <input type="text" value={productForm.careInstructions} onChange={(e) => setProductForm({ ...productForm, careInstructions: e.target.value })}
+                          placeholder="Care instructions" className="admin-input" />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Right: Live Preview ─────────────────────────────────── */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10, position: 'sticky', top: 0 }}>
+                  <div style={{ fontSize: 10, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', color: 'var(--on-surface-variant)' }}>
+                    Live Preview
+                  </div>
+
+                  <div style={{ background: 'var(--surface-container-lowest)', border: '1px solid var(--outline-variant)', borderRadius: 12, overflow: 'hidden' }}>
+                    {/* Image */}
+                    <div style={{ position: 'relative', width: '100%', aspectRatio: '3/4', background: 'var(--surface-container)' }}>
+                      {productForm.images?.filter(Boolean).length > 0 ? (
+                        <img src={productForm.images.filter(Boolean)[0]} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--on-surface-variant)', gap: 8 }}>
+                          <span className="material-symbols-outlined" style={{ fontSize: 32, opacity: 0.4 }}>image</span>
+                          <span style={{ fontSize: 11, opacity: 0.5 }}>No image yet</span>
+                        </div>
+                      )}
+                      {productForm.badge && (
+                        <div style={{ position: 'absolute', top: 10, left: 10, background: 'var(--primary)', color: '#000', fontSize: 9, fontWeight: 900, padding: '2px 7px', borderRadius: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                          {productForm.badge}
+                        </div>
+                      )}
+                      <div style={{ position: 'absolute', top: 10, right: 10, background: productForm.inStock ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)', color: '#fff', fontSize: 9, fontWeight: 700, padding: '2px 6px', borderRadius: 3, textTransform: 'uppercase' }}>
+                        {productForm.inStock ? 'In Stock' : 'Out of Stock'}
+                      </div>
+                    </div>
+
+                    {/* Meta */}
+                    <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      <div style={{ fontSize: 9, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, color: 'var(--on-surface-variant)' }}>
+                        {productForm.category || 'Category'}
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--on-surface)', lineHeight: 1.3 }}>
+                        {productForm.name || 'Garment Name'}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+                        <span style={{ fontSize: 15, fontWeight: 900, color: 'var(--primary)' }}>₹{Number(productForm.price || 0).toLocaleString('en-IN')}</span>
+                        {productForm.originalPrice && Number(productForm.originalPrice) > Number(productForm.price) && (
+                          <span style={{ fontSize: 11, textDecoration: 'line-through', color: 'var(--on-surface-variant)' }}>₹{Number(productForm.originalPrice).toLocaleString('en-IN')}</span>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                        {(productForm.sizes || []).map(s => (
+                          <span key={s.size} style={{ fontSize: 10, padding: '2px 6px', borderRadius: 4, background: 'var(--surface-container)', color: 'var(--on-surface)', border: '1px solid var(--outline-variant)' }}>{s.size}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: 11, color: 'var(--on-surface-variant)', lineHeight: 1.5, padding: '10px 12px', background: 'var(--surface-container-lowest)', borderRadius: 8, border: '1px solid var(--outline-variant)' }}>
+                    💡 Only <strong>Name</strong>, <strong>Category</strong>, and <strong>Price</strong> are required.
+                  </div>
+                </div>
               </div>
 
               {/* Actions */}
-              <div className="admin-form-actions">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  style={{
-                    padding: '10px 18px',
-                    borderRadius: 8,
-                    background: 'transparent',
-                    border: '1px solid var(--outline-variant)',
-                    color: 'var(--on-surface-variant)',
-                    cursor: 'pointer',
-                  }}
-                >
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, borderTop: '1px solid var(--outline-variant)', paddingTop: 14, marginTop: 14 }}>
+                <button type="button" onClick={() => setIsModalOpen(false)}
+                  style={{ padding: '10px 20px', borderRadius: 8, background: 'transparent', border: '1px solid var(--outline-variant)', color: 'var(--on-surface-variant)', cursor: 'pointer', fontSize: 13, fontWeight: 600 }}>
                   Cancel
                 </button>
-
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="btn-primary"
-                  style={{
-                    padding: '10px 24px',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.08em',
-                    cursor: 'pointer',
-                  }}
-                >
-                  {loading ? 'Saving...' : editingProduct ? 'Update Garment' : 'Publish Garment'}
+                <button type="submit" disabled={loading} className="btn-primary"
+                  style={{ padding: '10px 28px', borderRadius: 8, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span className="material-symbols-outlined" style={{ fontSize: 16 }}>{loading ? 'sync' : editingProduct ? 'save' : 'publish'}</span>
+                  {loading ? 'Saving…' : editingProduct ? 'Update Garment' : 'Publish to Atelier'}
                 </button>
               </div>
             </form>

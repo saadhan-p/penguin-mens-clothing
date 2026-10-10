@@ -8,7 +8,7 @@ export default function OrderStatus() {
   const navigate = useNavigate();
   const { clearCart } = useCart();
 
-  const merchantTxnId = searchParams.get('txn') || searchParams.get('orderId');
+  const orderRef = searchParams.get('txn') || searchParams.get('orderId') || searchParams.get('id');
   const [order, setOrder] = useState(null);
   const [loading, setLoading] = useState(true);
   const [pollCount, setPollCount] = useState(0);
@@ -16,9 +16,9 @@ export default function OrderStatus() {
   const cartClearedRef = useRef(false);
 
   useEffect(() => {
-    if (!merchantTxnId) {
+    if (!orderRef) {
       setLoading(false);
-      setError('No transaction reference found.');
+      setError('No transaction or order reference found.');
       return;
     }
 
@@ -27,13 +27,13 @@ export default function OrderStatus() {
 
     const fetchStatus = async () => {
       try {
-        const res = await checkOrderStatus(merchantTxnId);
+        const res = await checkOrderStatus(orderRef);
         if (!isMounted) return;
 
         if (res?.success && res.order) {
           setOrder(res.order);
 
-          if (res.order.paymentStatus === 'success' || res.order.status === 'paid') {
+          if (res.order.paymentStatus === 'success' || res.order.status === 'paid' || res.order.paymentProvider === 'cod') {
             if (!cartClearedRef.current) {
               clearCart();
               cartClearedRef.current = true;
@@ -78,7 +78,7 @@ export default function OrderStatus() {
       isMounted = false;
       if (timer) clearTimeout(timer);
     };
-  }, [merchantTxnId, pollCount, clearCart]);
+  }, [orderRef, pollCount, clearCart]);
 
   if (loading) {
     return (
@@ -108,10 +108,10 @@ export default function OrderStatus() {
           letterSpacing: '0.05em',
           marginBottom: 8,
         }}>
-          Verifying Payment with PhonePe...
+          Verifying Order Details...
         </h2>
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', maxWidth: 360, lineHeight: 1.5 }}>
-          Securely validating transaction confirmation from PhonePe Hermes Gateway. Please do not refresh.
+          Securely validating transaction confirmation with Razorpay. Please do not refresh.
         </p>
       </div>
     );
@@ -159,8 +159,9 @@ export default function OrderStatus() {
     );
   }
 
-  // Payment Success
-  if (order.paymentStatus === 'success' || order.status === 'paid') {
+  // Payment Success or COD Placed
+  if (order.paymentStatus === 'success' || order.status === 'paid' || order.paymentProvider === 'cod') {
+    const isCod = order.paymentProvider === 'cod';
     return (
       <div style={{ display: 'flex', flexDirection: 'column', width: '100%', padding: '40px 16px 80px' }}>
         <div className="content-container" style={{ maxWidth: 640 }}>
@@ -195,7 +196,7 @@ export default function OrderStatus() {
               display: 'block',
               marginBottom: 8,
             }}>
-              Payment Verified • PhonePe Secure
+              {isCod ? 'Cash on Delivery Verified' : 'Payment Verified • Razorpay Secure'}
             </span>
 
             <h1 style={{
@@ -210,7 +211,7 @@ export default function OrderStatus() {
             </h1>
 
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, maxWidth: 440, margin: '0 auto 24px' }}>
-              Your order has been placed with Penguin Atelier. An email receipt and dispatch details have been dispatched.
+              Your order has been placed with Penguin Atelier. An email receipt and dispatch details have been sent.
             </p>
 
             <div style={{
@@ -223,11 +224,15 @@ export default function OrderStatus() {
             }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: 12, marginBottom: 12, fontSize: 13 }}>
                 <span style={{ color: 'var(--text-muted)' }}>Order ID</span>
-                <span style={{ fontWeight: 800 }}>{order.id}</span>
+                <span style={{ fontWeight: 800 }}>{order.orderNumber || order.id}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: 12, marginBottom: 12, fontSize: 13 }}>
-                <span style={{ color: 'var(--text-muted)' }}>Amount Paid</span>
+                <span style={{ color: 'var(--text-muted)' }}>{isCod ? 'Payable on Delivery' : 'Amount Paid'}</span>
                 <span style={{ fontWeight: 900, color: 'var(--brand-green, #22c55e)' }}>₹{Math.round(order.total).toLocaleString('en-IN')}</span>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid var(--border-light)', paddingBottom: 12, marginBottom: 12, fontSize: 13 }}>
+                <span style={{ color: 'var(--text-muted)' }}>Payment Method</span>
+                <span style={{ fontWeight: 800, textTransform: 'uppercase' }}>{isCod ? 'Cash on Delivery' : 'Razorpay Secure'}</span>
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                 <span style={{ color: 'var(--text-muted)' }}>Courier Dispatch</span>
@@ -317,7 +322,7 @@ export default function OrderStatus() {
             </h1>
 
             <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 28 }}>
-              PhonePe reported that this transaction was cancelled or declined. No amount has been deducted.
+              The payment was cancelled or declined. No amount has been deducted.
             </p>
 
             <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
@@ -373,7 +378,7 @@ export default function OrderStatus() {
         Payment Confirmation Pending
       </h1>
       <p style={{ fontSize: 14, color: 'var(--text-secondary)', maxWidth: 440, lineHeight: 1.6, marginBottom: 24 }}>
-        We are awaiting final status confirmation from PhonePe. Once the transaction completes, your order will automatically update in your account.
+        We are awaiting final status confirmation. Once the transaction completes, your order will automatically update in your account.
       </p>
       <Link
         to="/account"

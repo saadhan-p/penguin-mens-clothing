@@ -129,15 +129,18 @@ model Order {
   status          String      @default("pending") // pending | paid | shipped | delivered | cancelled | failed
   orderStatus     String      @default("Processing")
   shippingAddress Json
-  paymentProvider String      @default("phonepe")
-  paymentMethod   String      @default("phonepe")
-  paymentStatus   String      @default("initiated") // initiated | success | failed | pending
-  merchantTxnId   String?     @unique // what you send to PhonePe
-  phonepeTxnId    String?     // what PhonePe sends back
-  trackingNumber  String?
-  notes           String?
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  paymentProvider   String      @default("razorpay")
+  paymentMethod     String      @default("razorpay")
+  paymentStatus     String      @default("initiated") // initiated | success | failed | pending
+  merchantTxnId     String?     @unique // what you send to PhonePe / custom reference
+  phonepeTxnId      String?     // what PhonePe sends back
+  razorpayOrderId   String?     @unique // Razorpay Order ID (order_xxx)
+  razorpayPaymentId String?     // Razorpay Payment ID (pay_xxx)
+  razorpaySignature String?     // Razorpay Verification Signature
+  trackingNumber    String?
+  notes             String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
 
   @@map("orders")
 }
@@ -189,7 +192,10 @@ model SiteConfig {
   heroSubheadline    String?
   heroImage          String?
   heroDropTag        String?
+  heroSlides         Json?    @default("[]")
+  promotionalDrops   Json?    @default("[]")
   showWinterDrop     Boolean  @default(true)
+  enableCod          Boolean  @default(true)
   winterDropTitle    String?
   winterDropSubtitle String?
   winterDropCta      String?

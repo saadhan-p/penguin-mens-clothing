@@ -147,6 +147,8 @@ export default function HomePage() {
   const [activeTab, setActiveTab] = useState('All')
   const [products, setProducts] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [heroSlides, setHeroSlides] = useState(HERO_SLIDES)
+  const [activeDrops, setActiveDrops] = useState([])
 
   const newArrivalsTrackRef = useRef(null)
 
@@ -161,13 +163,25 @@ export default function HomePage() {
     }
   }
 
+  // Load site config (hero slides + drops)
+  useEffect(() => {
+    getSiteConfig().then(res => {
+      if (res?.data) {
+        const slides = res.data.heroSlides
+        if (slides && slides.length > 0) setHeroSlides(slides)
+        const drops = (res.data.drops || []).filter(d => d.isVisible)
+        setActiveDrops(drops)
+      }
+    }).catch(() => {})
+  }, [])
+
   // Auto-advance hero carousel
   useEffect(() => {
     const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % HERO_SLIDES.length)
+      setCurrentSlide(prev => (prev + 1) % heroSlides.length)
     }, 6500)
     return () => clearInterval(timer)
-  }, [])
+  }, [heroSlides.length])
 
   // Load products from backend API
   useEffect(() => {
@@ -216,11 +230,11 @@ export default function HomePage() {
     <div className="homepage-container" style={{ display: 'flex', flexDirection: 'column', gap: 36, paddingBottom: 64 }}>
       {/* ─── 1. HERO CAROUSEL ─────────────────────────────────────────────── */}
       <section className="hero-slider-section">
-        {HERO_SLIDES.map((slide, index) => {
+        {heroSlides.map((slide, index) => {
           const isActive = index === currentSlide
           return (
             <div
-              key={slide.id}
+              key={slide.id || index}
               className={`hero-slide-item ${isActive ? 'active' : ''}`}
             >
               <img
@@ -231,18 +245,16 @@ export default function HomePage() {
               <div className="hero-slide-overlay" />
 
               <div className="hero-slide-content">
-
-
                 <h1 className="hero-title-main">
                   {slide.title}
                 </h1>
 
                 <div className="hero-cta-row">
                   <button
-                    onClick={() => navigate(slide.link)}
+                    onClick={() => navigate(slide.link || '/collection')}
                     className="hero-cta-btn"
                   >
-                    <span>{slide.cta}</span>
+                    <span>{slide.cta || 'SHOP NOW'}</span>
                     <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
                   </button>
                 </div>
@@ -254,14 +266,14 @@ export default function HomePage() {
         {/* Carousel Nav Arrows */}
         <button
           className="slider-arrow-btn prev desktop-only"
-          onClick={() => setCurrentSlide(prev => (prev - 1 + HERO_SLIDES.length) % HERO_SLIDES.length)}
+          onClick={() => setCurrentSlide(prev => (prev - 1 + heroSlides.length) % heroSlides.length)}
           aria-label="Previous Slide"
         >
           <span className="material-symbols-outlined">chevron_left</span>
         </button>
         <button
           className="slider-arrow-btn next desktop-only"
-          onClick={() => setCurrentSlide(prev => (prev + 1) % HERO_SLIDES.length)}
+          onClick={() => setCurrentSlide(prev => (prev + 1) % heroSlides.length)}
           aria-label="Next Slide"
         >
           <span className="material-symbols-outlined">chevron_right</span>
@@ -269,7 +281,7 @@ export default function HomePage() {
 
         {/* Dots */}
         <div className="slider-dots-container">
-          {HERO_SLIDES.map((_, i) => (
+          {heroSlides.map((_, i) => (
             <button
               key={i}
               className={`slider-dot-btn ${i === currentSlide ? 'active' : ''}`}
@@ -462,6 +474,53 @@ export default function HomePage() {
           </button>
         </div>
       </section>
+
+      {/* ─── 4b. SEASONAL DROP BANNERS (from Admin) ─────────────────────────── */}
+      {activeDrops.map((drop) => (
+        <section
+          key={drop.id}
+          style={{
+            position: 'relative',
+            minHeight: 280,
+            borderRadius: 'var(--radius-lg, 16px)',
+            overflow: 'hidden',
+            display: 'flex',
+            alignItems: 'center',
+            background: drop.img ? 'transparent' : 'linear-gradient(135deg, #0f1117 0%, #1a1f2e 100%)',
+            margin: '0 var(--page-padding, 24px)',
+          }}
+          onClick={() => drop.link && navigate(drop.link)}
+        >
+          {drop.img && (
+            <>
+              <img src={drop.img} alt={drop.title} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.35) 100%)' }} />
+            </>
+          )}
+          <div style={{ position: 'relative', zIndex: 1, padding: '40px 48px', maxWidth: 560 }}>
+            {drop.name && (
+              <div style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.18em', textTransform: 'uppercase', color: 'var(--brand-accent, #c9a96e)', marginBottom: 10 }}>
+                {drop.name}
+              </div>
+            )}
+            <h2 style={{ fontSize: 'clamp(28px, 4vw, 44px)', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '-0.02em', color: '#fff', margin: '0 0 12px', lineHeight: 1.1 }}>
+              {drop.title}
+            </h2>
+            {drop.subtitle && (
+              <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.75)', margin: '0 0 24px', lineHeight: 1.6, maxWidth: 420 }}>
+                {drop.subtitle}
+              </p>
+            )}
+            <button
+              onClick={(e) => { e.stopPropagation(); drop.link && navigate(drop.link); }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 28px', background: '#fff', color: '#000', border: 'none', borderRadius: 4, fontSize: 12, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', cursor: 'pointer' }}
+            >
+              {drop.cta || 'SHOP NOW'}
+              <span className="material-symbols-outlined" style={{ fontSize: 16 }}>arrow_forward</span>
+            </button>
+          </div>
+        </section>
+      ))}
 
       {/* ─── 5. PRODUCT CATALOG & TABS ─────────────────────────────────────── */}
       <section className="content-container">

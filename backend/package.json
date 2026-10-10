@@ -30,6 +30,7 @@
     "nodemailer": "^10.0.15",
     "prisma": "^6.19.3",
     "qrcode": "^1.5.4",
+    "razorpay": "^2.9.8",
     "speakeasy": "^2.0.0"
   },
   "devDependencies": {

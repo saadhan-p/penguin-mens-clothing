@@ -1,89 +1,74 @@
 import crypto from 'crypto';
 import prisma from '../config/prisma.js';
-import { initiatePayment, checkPaymentStatus, verifyCallbackChecksum } from '../services/phonepe.js';
+import {
+  createRazorpayOrder,
+  verifyPaymentSignature,
+  verifyWebhookSignature,
+  getRazorpayKeyId,
+} from '../services/razorpay.js';
 
 const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
-const API_URL = process.env.API_URL || 'http://localhost:5001';
 
 /**
- * Shared order finalization helper
- * Checks status directly from PhonePe and performs atomic inventory deduction
+ * Helper to finalize order and atomically decrement product inventory
  */
-async function finalizeOrderFromStatus(merchantTxnId) {
+async function finalizeOrderPayment(orderId, paymentId = null, signature = null) {
   const order = await prisma.order.findUnique({
-    where: { merchantTxnId },
+    where: { id: orderId },
     include: { items: true },
   });
 
   if (!order) return null;
   if (order.paymentStatus === 'success') return order; // Already finalized
 
-  try {
-    const statusResponse = await checkPaymentStatus(merchantTxnId);
+  // Atomic stock decrement per item
+  for (const item of order.items) {
+    if (item.productId) {
+      const updated = await prisma.product.updateMany({
+        where: {
+          id: item.productId,
+          stock: { gte: item.quantity },
+        },
+        data: {
+          stock: { decrement: item.quantity },
+        },
+      });
 
-    if (statusResponse.code === 'PAYMENT_SUCCESS') {
-      // Atomic stock decrement per item
-      for (const item of order.items) {
-        if (item.productId) {
-          const updated = await prisma.product.updateMany({
-            where: {
-              id: item.productId,
-              stock: { gte: item.quantity },
-            },
-            data: {
-              stock: { decrement: item.quantity },
-            },
-          });
-
-          if (updated.count === 0) {
-            // Stock ran out between checkout & payment confirmation
-            await prisma.order.update({
-              where: { id: order.id },
-              data: { status: 'failed', paymentStatus: 'success' },
-            });
-            console.error(`🚨 CRITICAL: Order ${order.id} paid but productId ${item.productId} (${item.name}) ran out of stock. Manual resolution required.`);
-            return order;
-          }
-        }
+      if (updated.count === 0) {
+        console.warn(`🚨 Stock depleted for productId ${item.productId} (${item.name}) during order ${order.id}.`);
       }
-
-      return await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          status: 'paid',
-          orderStatus: 'Processing',
-          paymentStatus: 'success',
-          phonepeTxnId: statusResponse.data?.transactionId || statusResponse.data?.providerReferenceId,
-        },
-        include: { items: true },
-      });
-    } else if (
-      statusResponse.code === 'PAYMENT_ERROR' ||
-      statusResponse.code === 'PAYMENT_DECLINED' ||
-      statusResponse.code === 'TIMED_OUT'
-    ) {
-      return await prisma.order.update({
-        where: { id: order.id },
-        data: {
-          status: 'cancelled',
-          paymentStatus: 'failed',
-        },
-        include: { items: true },
-      });
     }
-  } catch (err) {
-    console.error(`Error querying PhonePe status for ${merchantTxnId}:`, err.message);
   }
 
-  return order;
+  return await prisma.order.update({
+    where: { id: order.id },
+    data: {
+      status: 'paid',
+      orderStatus: 'Processing',
+      paymentStatus: 'success',
+      razorpayPaymentId: paymentId || order.razorpayPaymentId,
+      razorpaySignature: signature || order.razorpaySignature,
+    },
+    include: { items: true },
+  });
 }
 
 /**
- * Create Order & Initiate PhonePe Payment
+ * Returns Razorpay Public Key ID to client
+ */
+export const getRazorpayKey = async (req, res) => {
+  return res.status(200).json({
+    success: true,
+    keyId: getRazorpayKeyId(),
+  });
+};
+
+/**
+ * Create Order & Initiate Razorpay Payment / COD
  */
 export const createOrderAndInitiatePayment = async (req, res) => {
   try {
-    const { items, shippingAddress, paymentMethod = 'phonepe' } = req.body;
+    const { items, shippingAddress, paymentMethod = 'razorpay' } = req.body;
     const customerId = req.customer?.id || null;
 
     if (!items?.length || !shippingAddress) {
@@ -109,7 +94,7 @@ export const createOrderAndInitiatePayment = async (req, res) => {
       if (product && product.stock < item.quantity) {
         return res.status(400).json({
           success: false,
-          message: `${product.name} is out of stock.`,
+          message: `${product.name} is currently out of stock.`,
         });
       }
 
@@ -127,39 +112,55 @@ export const createOrderAndInitiatePayment = async (req, res) => {
     }
 
     const shippingFee = subtotal >= 1999 ? 0 : 99;
-    const total = subtotal + shippingFee;
-    const merchantTxnId = `PGN_${Date.now()}_${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const discount = subtotal > 1500 ? 100 : 0;
+    const total = Math.max(0, subtotal + shippingFee - discount);
     const orderNumber = `PGN-${Date.now().toString().slice(-6)}-${Math.floor(100 + Math.random() * 900)}`;
 
-    const order = await prisma.order.create({
-      data: {
-        orderNumber,
-        customerId,
-        customerName: shippingAddress.name || req.customer?.name || 'Guest Client',
-        email: shippingAddress.email || req.customer?.email || 'client@penguin.com',
-        phone: shippingAddress.phone || req.customer?.phone || null,
-        subtotal,
-        shippingFee,
-        total,
-        status: 'pending',
-        orderStatus: 'Processing',
-        shippingAddress,
-        paymentProvider: paymentMethod === 'cod' ? 'cod' : 'phonepe',
-        paymentMethod,
-        paymentStatus: paymentMethod === 'cod' ? 'pending' : 'initiated',
-        merchantTxnId: paymentMethod === 'cod' ? null : merchantTxnId,
-        trackingNumber: `EXP-${Math.floor(10000000 + Math.random() * 90000000)}`,
-        items: {
-          create: orderItemsData,
-        },
-      },
-      include: {
-        items: true,
-      },
-    });
-
-    // If COD, return order right away
+    // If COD, check if enabled by store admin
     if (paymentMethod === 'cod') {
+      const siteConfig = await prisma.siteConfig.findFirst();
+      if (siteConfig && siteConfig.enableCod === false) {
+        return res.status(400).json({
+          success: false,
+          message: 'Cash on Delivery (COD) is currently disabled. Please select Razorpay online payment.',
+        });
+      }
+
+      const order = await prisma.order.create({
+        data: {
+          orderNumber,
+          customerId,
+          customerName: shippingAddress.name || req.customer?.name || 'Guest Client',
+          email: shippingAddress.email || req.customer?.email || 'client@penguin.com',
+          phone: shippingAddress.phone || req.customer?.phone || null,
+          subtotal,
+          shippingFee,
+          discount,
+          total,
+          status: 'pending',
+          orderStatus: 'Processing',
+          shippingAddress,
+          paymentProvider: 'cod',
+          paymentMethod: 'cod',
+          paymentStatus: 'pending',
+          trackingNumber: `EXP-${Math.floor(10000000 + Math.random() * 90000000)}`,
+          items: {
+            create: orderItemsData,
+          },
+        },
+        include: { items: true },
+      });
+
+      // Deduct stock for COD order
+      for (const item of order.items) {
+        if (item.productId) {
+          await prisma.product.updateMany({
+            where: { id: item.productId, stock: { gte: item.quantity } },
+            data: { stock: { decrement: item.quantity } },
+          });
+        }
+      }
+
       return res.status(201).json({
         success: true,
         isCod: true,
@@ -170,111 +171,187 @@ export const createOrderAndInitiatePayment = async (req, res) => {
       });
     }
 
-    // Initiate PhonePe Payment
-    const redirectUrl = process.env.PHONEPE_REDIRECT_URL || `${CLIENT_URL}/order/status?txn=${merchantTxnId}`;
-    const callbackUrl = process.env.PHONEPE_CALLBACK_URL || `${API_URL}/api/payments/phonepe/callback`;
+    // 1. Create Razorpay Order
+    const amountInPaise = Math.round(total * 100);
+    const rzpResult = await createRazorpayOrder({
+      amountInPaise,
+      currency: 'INR',
+      receipt: orderNumber,
+      notes: {
+        customerName: shippingAddress.name || req.customer?.name || 'Penguin Client',
+        customerEmail: shippingAddress.email || req.customer?.email || 'client@penguin.com',
+        customerPhone: shippingAddress.phone || '',
+      },
+    });
 
-    try {
-      const phonepeResponse = await initiatePayment({
-        merchantTxnId,
-        amountInPaise: Math.round(total * 100),
-        customerId: customerId || `GUEST_${merchantTxnId}`,
-        redirectUrl,
-        callbackUrl,
-        mobileNumber: shippingAddress.phone,
-      });
+    const razorpayOrder = rzpResult.order;
 
-      if (!phonepeResponse.success) {
-        await prisma.order.update({
-          where: { id: order.id },
-          data: { paymentStatus: 'failed', status: 'cancelled' },
-        });
-        return res.status(502).json({
-          success: false,
-          message: phonepeResponse.message || 'Could not initiate PhonePe payment.',
-        });
-      }
+    // 2. Persist order in PostgreSQL
+    const order = await prisma.order.create({
+      data: {
+        orderNumber,
+        customerId,
+        customerName: shippingAddress.name || req.customer?.name || 'Guest Client',
+        email: shippingAddress.email || req.customer?.email || 'client@penguin.com',
+        phone: shippingAddress.phone || req.customer?.phone || null,
+        subtotal,
+        shippingFee,
+        discount,
+        total,
+        status: 'pending',
+        orderStatus: 'Processing',
+        shippingAddress,
+        paymentProvider: 'razorpay',
+        paymentMethod: 'razorpay',
+        paymentStatus: 'initiated',
+        razorpayOrderId: razorpayOrder.id,
+        trackingNumber: `EXP-${Math.floor(10000000 + Math.random() * 90000000)}`,
+        items: {
+          create: orderItemsData,
+        },
+      },
+      include: {
+        items: true,
+      },
+    });
 
-      const paymentRedirectUrl = phonepeResponse.data?.instrumentResponse?.redirectInfo?.url;
-      return res.status(200).json({
-        success: true,
-        redirectUrl: paymentRedirectUrl,
-        merchantTxnId,
-        orderId: order.id,
-        orderNumber: order.orderNumber,
-      });
-    } catch (pgError) {
-      console.error('PhonePe API initiation failed:', pgError.response?.data || pgError.message);
-      
-      // If PhonePe Sandbox test mode credentials fail or mock environment, gracefully return redirect simulation
-      if (process.env.NODE_ENV !== 'production') {
-        console.log('🔄 Dev mode: Providing local mock redirect link');
-        return res.status(200).json({
-          success: true,
-          redirectUrl: `${CLIENT_URL}/order/status?txn=${merchantTxnId}`,
-          merchantTxnId,
-          orderId: order.id,
-          orderNumber: order.orderNumber,
-          devNotice: 'Sandbox simulation redirect',
-        });
-      }
-
-      return res.status(502).json({
-        success: false,
-        message: 'Payment gateway is currently unreachable. Please try COD or try again shortly.',
-      });
-    }
+    return res.status(200).json({
+      success: true,
+      orderId: order.id,
+      orderNumber: order.orderNumber,
+      razorpayOrderId: razorpayOrder.id,
+      amount: razorpayOrder.amount,
+      currency: razorpayOrder.currency || 'INR',
+      keyId: getRazorpayKeyId(),
+      customer: {
+        name: order.customerName,
+        email: order.email,
+        phone: order.phone,
+      },
+    });
   } catch (error) {
     console.error('Order/payment initiation error:', error);
-    return res.status(500).json({ success: false, message: 'Something went wrong. Please try again.' });
+    return res.status(500).json({ success: false, message: error.message || 'Something went wrong. Please try again.' });
   }
 };
 
 /**
- * PhonePe Server-to-Server Webhook Callback
+ * Verify Razorpay Payment Signature
  */
-export const phonepeCallback = async (req, res) => {
+export const verifyRazorpayPaymentHandler = async (req, res) => {
   try {
-    const xVerify = req.headers['x-verify'];
-    const { response } = req.body;
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature, orderId } = req.body;
 
-    if (!verifyCallbackChecksum(xVerify, response)) {
-      console.warn('⚠️ PhonePe callback checksum mismatch — potential tampering attempt');
-      return res.status(400).json({ success: false, message: 'Invalid checksum.' });
+    if (!razorpay_order_id || !razorpay_payment_id || !razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: 'Missing payment signature verification parameters.',
+      });
     }
 
-    const decoded = JSON.parse(Buffer.from(response, 'base64').toString());
-    const merchantTxnId = decoded.data?.merchantTransactionId;
+    const isValid = verifyPaymentSignature({
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    });
 
-    if (merchantTxnId) {
-      console.log(`📥 PhonePe S2S Callback received for txn: ${merchantTxnId}`);
-      await finalizeOrderFromStatus(merchantTxnId);
+    if (!isValid) {
+      console.warn(`⚠️ Razorpay signature verification failed for order: ${razorpay_order_id}`);
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment signature. Transaction verification failed.',
+      });
     }
 
-    return res.status(200).json({ success: true });
+    // Find the corresponding order
+    let order = null;
+    if (orderId) {
+      order = await prisma.order.findUnique({ where: { id: orderId } });
+    }
+    if (!order && razorpay_order_id) {
+      order = await prisma.order.findUnique({ where: { razorpayOrderId: razorpay_order_id } });
+    }
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Associated order not found for verification.',
+      });
+    }
+
+    const finalizedOrder = await finalizeOrderPayment(order.id, razorpay_payment_id, razorpay_signature);
+
+    return res.status(200).json({
+      success: true,
+      message: 'Payment verified successfully.',
+      orderNumber: finalizedOrder.orderNumber,
+      orderId: finalizedOrder.id,
+      paymentStatus: finalizedOrder.paymentStatus,
+    });
   } catch (error) {
-    console.error('PhonePe callback error:', error);
-    return res.status(500).json({ success: false });
+    console.error('Razorpay payment verification error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error during payment verification.',
+    });
   }
 };
 
 /**
- * Customer status check upon return redirect
+ * Razorpay Server Webhook Callback
+ */
+export const razorpayWebhook = async (req, res) => {
+  try {
+    const signature = req.headers['x-razorpay-signature'];
+    const secret = process.env.RAZORPAY_WEBHOOK_SECRET;
+
+    if (secret && signature) {
+      const rawBody = JSON.stringify(req.body);
+      const isWebhookValid = verifyWebhookSignature({ rawBody, signature, secret });
+      if (!isWebhookValid) {
+        console.warn('⚠️ Razorpay webhook signature mismatch');
+        return res.status(400).json({ success: false, message: 'Invalid webhook signature.' });
+      }
+    }
+
+    const event = req.body.event;
+    const paymentEntity = req.body.payload?.payment?.entity;
+    const orderEntity = req.body.payload?.order?.entity;
+    const rzpOrderId = paymentEntity?.order_id || orderEntity?.id;
+
+    if (rzpOrderId && (event === 'payment.captured' || event === 'order.paid')) {
+      console.log(`📥 Razorpay Webhook [${event}] received for order: ${rzpOrderId}`);
+      const order = await prisma.order.findUnique({ where: { razorpayOrderId: rzpOrderId } });
+      if (order) {
+        await finalizeOrderPayment(order.id, paymentEntity?.id);
+      }
+    }
+
+    return res.status(200).json({ status: 'ok' });
+  } catch (error) {
+    console.error('Razorpay webhook error:', error);
+    return res.status(500).json({ success: false, message: 'Webhook error' });
+  }
+};
+
+/**
+ * Customer status check upon return/navigation
  */
 export const checkOrderStatus = async (req, res) => {
   try {
-    const { merchantTxnId } = req.params;
-    let order = await finalizeOrderFromStatus(merchantTxnId);
+    const { orderRef } = req.params;
 
-    // Fallback if not found by merchantTxnId, check by order id or orderNumber
-    if (!order) {
-      order = await prisma.order.findFirst({
-        where: {
-          OR: [{ id: merchantTxnId }, { orderNumber: merchantTxnId }],
-        },
-        include: { items: true },
-      });
-    }
+    let order = await prisma.order.findFirst({
+      where: {
+        OR: [
+          { orderNumber: orderRef },
+          { id: orderRef },
+          { razorpayOrderId: orderRef },
+          { merchantTxnId: orderRef },
+        ],
+      },
+      include: { items: true },
+    });
 
     if (!order) {
       return res.status(404).json({ success: false, message: 'Order not found.' });
@@ -285,13 +362,16 @@ export const checkOrderStatus = async (req, res) => {
       order: {
         id: order.orderNumber || order.id,
         rawId: order.id,
+        orderNumber: order.orderNumber,
         status: order.status,
         orderStatus: order.orderStatus,
         paymentStatus: order.paymentStatus,
+        paymentProvider: order.paymentProvider,
         total: order.total,
         trackingNumber: order.trackingNumber,
         items: order.items,
         shippingAddress: order.shippingAddress,
+        createdAt: order.createdAt,
       },
     });
   } catch (error) {
