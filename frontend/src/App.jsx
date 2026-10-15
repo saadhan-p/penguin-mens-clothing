@@ -99,7 +99,7 @@ export default function App() {
                 <Route path="/tracking" element={<TrackOrderPage />} />
                 <Route path="/order-tracking" element={<TrackOrderPage />} />
 
-                {/* PhonePe Order Status Callback Redirect */}
+                {/* Order Status & Payment Confirmation */}
                 <Route path="/order/status" element={<OrderStatusPage />} />
 
                 {/* Layer 1: Dedicated Store Admin Route (Merchandising & Orders) */}

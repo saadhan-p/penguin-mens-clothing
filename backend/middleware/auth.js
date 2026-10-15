@@ -7,7 +7,7 @@ if (!JWT_SECRET) {
 }
 
 export const protectAdmin = async (req, res, next) => {
-  const token = req.cookies?.admin_session;
+  const token = req.cookies?.admin_session || req.headers.authorization?.split(' ')[1];
 
   if (!token) {
     return res.status(401).json({ success: false, message: 'Authorization required. No active session.' });

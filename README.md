@@ -66,19 +66,6 @@ npm run dev
 
 ---
 
-## 🔑 Admin Portals & Default Credentials
-
-| Portal | URL | Description |
-| :--- | :--- | :--- |
-| **Store Admin** | [http://localhost:5173/penguin-ctrl-x7k2](http://localhost:5173/penguin-ctrl-x7k2) *(or `/admin`)* | Manage catalog, stock inventory, categories & customer orders |
-| **Superadmin Console** | [http://localhost:5173/penguin-super-ctrl](http://localhost:5173/penguin-super-ctrl) *(or `/superadmin`)* | Security governance, administrator accounts, audit logs & 2FA |
-
-### Default Credentials:
-- **Email**: `admin@penguin.com`
-- **Password**: `admin123`
-
----
-
 ## 🛠️ Helpful Commands
 
 ```bash

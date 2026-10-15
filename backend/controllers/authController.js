@@ -10,10 +10,12 @@ if (!JWT_SECRET) {
   throw new Error('JWT_SECRET must be set in environment variables.');
 }
 
+const isProd = process.env.NODE_ENV === 'production';
+
 const COOKIE_OPTS = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: 'strict',
+  secure: isProd,
+  sameSite: isProd ? 'none' : 'lax',
   maxAge: 2 * 60 * 60 * 1000,
 };
 
