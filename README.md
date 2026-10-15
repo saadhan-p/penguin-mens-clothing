@@ -72,8 +72,8 @@ npm run dev
 # Open Prisma Studio GUI
 npm run --prefix backend studio
 
-# Re-seed clean basic catalog
-node backend/scripts/seedCleanBasics.js
+# Restore curated store database (12 products, categories & real accounts)
+node backend/scripts/restoreDatabase.js
 
 # Build for production
 npm run build
