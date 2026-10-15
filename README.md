@@ -2,6 +2,8 @@
 
 Modern, minimalist luxury menswear e-commerce platform built with Node.js/Express, PostgreSQL, Prisma ORM, and React (Vite).
 
+> 📖 **Comprehensive Handover Documentation**: For complete architecture diagrams, database models, security, deployment, and operational procedures, refer to [HANDOVER_DOCUMENTATION.md](file:///Users/saadhan/Drive/Projects/Clients/Pengiun's%20Groups/HANDOVER_DOCUMENTATION.md).
+
 ---
 
 ## ⚡ Quick Start Guide (For New Setup)
