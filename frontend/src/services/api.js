@@ -1,6 +1,10 @@
 import axios from 'axios';
 
-const rawBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001/api';
+const defaultBase = import.meta.env.PROD
+  ? 'https://penguin-mens-clothing.onrender.com/api'
+  : 'http://localhost:5001/api';
+
+const rawBase = import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || defaultBase;
 const API_BASE = rawBase.replace(/\/+$/, '');
 
 const api = axios.create({
